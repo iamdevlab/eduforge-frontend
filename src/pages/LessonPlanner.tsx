@@ -35,7 +35,6 @@ interface Week {
     assessment: string;
     assignment: string[];
     summary: string;
-    board_summary: string;
     possible_difficulties: string[];
     period: string;
     duration: string;
