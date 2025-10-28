@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../services/apiClient';
 import { AlertCircle, BookOpen, Plus, X, Loader2 } from 'lucide-react';
-
+import axios from 'axios';
 
 interface FormData {
     region: string;
@@ -228,12 +228,12 @@ export default function ExamQuestions() {
         setLoading(true);
 
         try {
-            const token = localStorage.getItem('token');
+            // const token = localStorage.getItem('token');
 
-            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-            if (token) headers['Authorization'] = `Bearer ${token}`;
+            // const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            // if (token) headers['Authorization'] = `Bearer ${token}`;
 
-            const res = await apiClient.post('/questions/generate', formData, { headers });
+            const res = await apiClient.post('/questions/generate', formData);
 
             const data = res.data;
             setResponse(data);
@@ -244,20 +244,32 @@ export default function ExamQuestions() {
             } catch (navErr) {
                 console.error('Navigation to review page failed', navErr);
             }
-        } catch (unknownErr: unknown) {
-            // Prefer backend-provided message when available
-            const err = unknownErr as { response?: { data?: unknown }; message?: string };
-            const respData = err?.response?.data;
-            let message: string | undefined = undefined;
-            if (respData && typeof respData === 'object' && 'detail' in (respData as Record<string, unknown>)) {
-                const d = (respData as Record<string, unknown>)['detail'];
-                if (typeof d === 'string') message = d;
-            }
-            if (!message && respData && typeof respData === 'string') message = respData;
-            if (!message && err?.message) message = err.message;
-            if (!message) message = 'An error occurred';
+        } catch (err: unknown) {
+            console.error("Error generating questions:", err); // Log the full error
 
-            setError(message);
+            if (axios.isAxiosError(err)) {
+                if (err.response?.status === 401) {
+                    // 401 Unauthorized (Token expired or invalid)
+                    setError("Your session has expired. Redirecting to login...");
+                    // The apiClient interceptor already handled the logout.
+                    setTimeout(() => {
+                        navigate('/login');
+                    }, 3000);
+                } else if (err.response?.status === 402) {
+                    // 402 Payment Required (Free limit hit)
+                    // The apiClient interceptor handles showing the modal.
+                    // We just show the error message from the backend.
+                    const detail = err.response.data?.detail || "You have reached your free generation limit. Please upgrade.";
+                    setError(detail);
+                } else {
+                    // Other server error (e.g., 400 Validation, 500 Internal)
+                    const detail = err.response?.data?.detail || "An unexpected error occurred. Please try again.";
+                    setError(detail);
+                }
+            } else {
+                // Not an axios error (e.g., network error, client-side bug)
+                setError("An error occurred. Please check your connection and try again.");
+            }
         } finally {
             setLoading(false);
         }

@@ -11,6 +11,9 @@ import NotFound from "../pages/NotFound";
 import LoginPage from "../pages/LoginPage";
 import ReviewQuestions from "../pages/ReviewQuestions";
 import ReviewLessonPlan from "../pages/ReviewLessonPlan";
+import { UpgradeModal } from "../components/UpgradeModal";
+import PricingPage from "../pages/PricingPage";
+
 
 function AppRouter() {
     return (
@@ -27,10 +30,12 @@ function AppRouter() {
                     <Route path="lessons" element={<LessonPlanner />} />
                     <Route path="exams" element={<ExamQuestions />} />
                     <Route path="exams/review" element={<ReviewQuestions />} />
+                    <Route path="pricing" element={<PricingPage />} />
                     <Route path="lessons/review" element={<ReviewLessonPlan />} />
                     <Route path="*" element={<NotFound />} />
                 </Route>
             </Routes>
+            <UpgradeModal />
         </Router>
     );
 }

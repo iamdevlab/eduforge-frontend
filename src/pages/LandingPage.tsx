@@ -1,29 +1,23 @@
 import { Link } from "react-router-dom";
 import { BookOpen, FileText, ShieldCheck } from "lucide-react";
+import landingImage from "../assets/landing_image.png";
 
 function LandingPage() {
     return (
-        <div className="min-h-screen flex flex-col bg-gray-50">
-            {/* Navbar */}
-            <header className="flex items-center justify-between px-8 py-4 bg-white shadow">
-                <h1 className="text-2xl font-bold text-blue-700">EduForge</h1>
-                <nav>
-                    <Link
-                        to="/login"
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700"
-                    >
-                        Login
-                    </Link>
-                </nav>
-            </header>
-
+        <div
+            className="min-h-screen flex flex-col bg-cover bg-center"
+            style={{ backgroundImage: `url(${landingImage})` }}
+        >
             {/* Hero Section */}
-            <main className="flex-1 flex items-center justify-center px-6 py-12">
-                <div className="max-w-4xl text-center">
-                    <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
+            <main className="flex-1 flex items-center justify-center px-6 py-12 bg-black bg-opacity-50">
+                <div className="max-w-4xl text-center text-white">
+                    <h1 className="text-7xl md:text-8xl font-bold text-white mb-4 drop-shadow-lg">
+                        EduForge
+                    </h1>
+                    <h2 className="text-4xl md:text-5xl font-bold mb-8">
                         Simplify Lesson Planning & Exam Preparation
                     </h2>
-                    <p className="text-lg text-gray-600 mb-8">
+                    <p className="text-lg mb-8">
                         EduForge empowers teachers with tools to create, manage, and share
                         lesson plans and exam questions seamlessly — saving you time and
                         helping students succeed.

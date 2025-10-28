@@ -1,5 +1,13 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { BookOpen, FileText, Menu, ChevronLeft, LogOut } from "lucide-react";
+// --- 1. IMPORT CreditCard ICON ---
+import {
+    BookOpen,
+    FileText,
+    Menu,
+    ChevronLeft,
+    LogOut,
+    CreditCard,
+} from "lucide-react";
 import { useState } from "react";
 
 function Layout() {
@@ -10,6 +18,12 @@ function Layout() {
     const navItems = [
         { name: "Lesson Planner", path: "/lessons", icon: <BookOpen size={18} /> },
         { name: "Exam Questions", path: "/exams", icon: <FileText size={18} /> },
+        // --- 2. ADD PRICING PAGE LINK ---
+        {
+            name: "Pricing & Billing",
+            path: "/pricing",
+            icon: <CreditCard size={18} />,
+        },
     ];
 
     // Logout handler with confirmation
@@ -23,7 +37,8 @@ function Layout() {
     };
 
     return (
-        <div className="flex min-h-screen bg-gray-100">
+        // --- 3. MAKE LAYOUT FIXED TO SCREEN HEIGHT ---
+        <div className="flex h-screen bg-gray-100 overflow-hidden">
             {/* Sidebar */}
             <aside
                 className={`${collapsed ? "w-20" : "w-64"
@@ -84,7 +99,8 @@ function Layout() {
             </aside>
 
             {/* Main content */}
-            <main className="flex-1 p-6">
+            {/* --- 4. MAKE MAIN CONTENT AREA SCROLLABLE --- */}
+            <main className="flex-1 p-6 overflow-y-auto">
                 <Outlet />
             </main>
         </div>

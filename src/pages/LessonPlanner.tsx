@@ -2,9 +2,10 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { RefreshCw, Zap, BookOpen, ChevronDown, CheckCircle, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../services/apiClient';
+import axios from 'axios';
 
-// --- INTERFACES ---
 
+// --- TYPES & INTERFACES ---
 /** Defines the structure for the request payload based on lesson_plan.py */
 interface LessonPlanRequest {
     school_name: string;
@@ -359,15 +360,11 @@ const LessonPlanner: React.FC = () => {
         };
 
         try {
-            const token = localStorage.getItem('token');
+
             const response = await apiClient.post<LessonPlanResponse>(
                 'api/lesson-plan',
                 requestPayload,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
-                }
+
             );
 
             setLessonPlan(response.data.plan);
@@ -378,15 +375,30 @@ const LessonPlanner: React.FC = () => {
                 navigate('/lessons/review', { state: { lessonPlan: response.data.plan } });
             }, 1500);
         } catch (err: unknown) {
-            console.error(err);
-            let errorMsg = 'Failed to generate lesson plan. Please check your inputs and try again.';
-            if (typeof err === 'object' && err !== null && 'response' in err) {
-                const response = (err as { response?: { data?: { detail?: string } } }).response;
-                if (response && response.data && response.data.detail) {
-                    errorMsg = response.data.detail;
+            console.error("Error generating lesson plan:", err); // Log the full error
+
+            if (axios.isAxiosError(err)) {
+                if (err.response?.status === 401) {
+                    // 401 Unauthorized
+                    setError("Your session has expired. Redirecting to login...");
+                    // apiClient interceptor already logged out, just redirect.
+                    setTimeout(() => {
+                        navigate('/login');
+                    }, 3000);
+                } else if (err.response?.status === 402) {
+                    // 402 Payment Required
+                    // apiClient interceptor shows the modal.
+                    const detail = err.response.data?.detail || "You have reached your free generation limit. Please upgrade.";
+                    setError(detail);
+                } else {
+                    // Other server error
+                    const detail = err.response?.data?.detail || "An unexpected error occurred. Please try again.";
+                    setError(detail);
                 }
+            } else {
+                // Not an axios error
+                setError("An error occurred. Please check your connection and try again.");
             }
-            setError(errorMsg);
         } finally {
             setIsLoading(false);
         }
