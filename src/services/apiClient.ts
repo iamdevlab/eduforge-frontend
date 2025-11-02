@@ -11,8 +11,12 @@ import axios from 'axios';
 import { useAuthStore } from '../stores/useAuthStore'; // Import auth store
 import { useUpgradeModalStore } from '../stores/useUpgradeModalStore'; // Import modal store
 
+// const apiClient = axios.create({
+//     baseURL: 'http://localhost:8000/', // Your backend URL
+// });
+
 const apiClient = axios.create({
-    baseURL: 'http://localhost:8000/', // Your backend URL
+    baseURL: import.meta.env.VITE_API_URL, // Uses the .env variable
 });
 
 // --- 1. Request Interceptor (Adds Auth Token) ---
