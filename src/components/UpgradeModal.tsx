@@ -1,5 +1,5 @@
 // src/components/UpgradeModal.tsx
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useUpgradeModalStore } from '../stores/useUpgradeModalStore';
 import apiClient from '../services/apiClient';
 import { CheckCircle } from 'lucide-react'; // Import the check icon
