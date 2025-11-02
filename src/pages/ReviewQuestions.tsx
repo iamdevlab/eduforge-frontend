@@ -1,343 +1,330 @@
 import { useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, FileDown, Loader2 } from 'lucide-react';
+import { ArrowLeft, BookOpen, FileDown, Loader2, RefreshCw, AlertTriangle } from 'lucide-react';
+import apiClient from '../services/apiClient'; // Assuming you have this file
 
-// --- Enhanced Export Libraries ---
+// Import libraries for exporting
 import jsPDF from 'jspdf';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, PageBreak, AlignmentType, Table, TableRow, TableCell, WidthType, Header, Footer, PageNumber } from 'docx';
+import html2canvas from 'html2canvas';
+import {
+    Document,
+    Packer,
+    Paragraph,
+    TextRun,
+    HeadingLevel,
+    PageBreak,
+    AlignmentType,
+    Header,
+    Footer,
+    PageNumber,
+    BorderStyle
+} from 'docx';
 import { saveAs } from 'file-saver';
 
-// --- Type Definitions (moved to top for clarity, ideally in a shared types.ts file) ---
-interface Objective {
-    question: string;
-    options: Record<string, string>;
+// --- 1. TYPESCRIPT INTERFACES (PRECISE) ---
+
+/** Defines the new ERROR week structure */
+interface WeekGenerationError {
+    status: "failed";
+    week_number: number;
+    topic: string;
+    error_message: string;
+    start_date: string; // Now guaranteed from backend
+    end_date: string;   // Now guaranteed from backend
 }
 
-interface Essay {
-    question: string;
-    sub_questions: string[];
+/** Defines the SUCCESSFUL week structure */
+interface LessonWeek {
+    status: "success";
+    week_number: number;
+    start_date: string;
+    end_date: string;
+    topic: string;
+    subtopic?: string;
+    objectives: string[];
+    instructional_materials: string[];
+    prerequisite_knowledge?: string;
+    activities: {
+        introduction: string;
+        explanation: string;
+        guided_practice: string;
+        independent_practice: string;
+        practical: string;
+    };
+    assessment: string;
+    assignment: string;
+    summary: string;
+    possible_difficulties: string;
+    remarks?: string;
+    period: string;
+    duration_minutes: number;
 }
 
-interface Answer {
-    type: "objective" | "essay";
-    answer: string;
+/** Create a Union Type for the 'weeks' array */
+type LessonPlanWeek = LessonWeek | WeekGenerationError;
+
+/** Update LessonPlan to use the Union Type */
+interface LessonPlan {
+    school_name: string;
+    state: string;
+    lga?: string;
+    subject: string;
+    class_level: string;
+    term: string;
+    academic_session?: string;
+    resumption_date: string;
+    duration_weeks: number;
+    weeks: LessonPlanWeek[];
 }
 
-interface QuestionResponse {
-    subject?: string; // Optional subject for dynamic naming
-    objectives: Objective[];
-    essays: Essay[];
-    answers: Answer[];
+// --- 2. WeekErrorCard COMPONENT (NO ASSUMPTIONS) ---
+// This component handles the logic for retrying a single failed week.
+
+interface WeekErrorCardProps {
+    weekError: WeekGenerationError;
+    planDetails: LessonPlan;
+    onRetry: (weekIndex: number, newData: LessonPlanWeek) => void;
 }
 
-export default function ReviewQuestions() {
+const WeekErrorCard: React.FC<WeekErrorCardProps> = ({ weekError, planDetails, onRetry }) => {
+    const [isLoading, setIsLoading] = useState(false);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+    const handleRetry = async () => {
+        setIsLoading(true);
+        setErrorMessage(null);
+
+        try {
+            // No assumptions. We use the dates from the weekError object.
+            const response = await apiClient.post<LessonPlanWeek>('/api/lesson-plan/retry-week', {
+                subject: planDetails.subject,
+                class_level: planDetails.class_level,
+                term: planDetails.term,
+                week_number: weekError.week_number,
+                topic: weekError.topic,
+                start_date: weekError.start_date, // <-- Using precise data
+                end_date: weekError.end_date,     // <-- Using precise data
+            });
+
+            // Pass the new data (either success or another failure) up
+            // We use week_number - 1 to get the 0-based array index
+            onRetry(weekError.week_number - 1, response.data);
+
+        } catch (err: any) {
+            console.error("Retry failed:", err);
+            setErrorMessage(err.response?.data?.detail || "An unexpected error occurred during retry.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                <div>
+                    <h3 className="text-xl font-bold text-red-800">
+                        WEEK {weekError.week_number}: {weekError.topic}
+                    </h3>
+                    <p className="text-red-700 mt-1">Generation Failed</p>
+                </div>
+                <button
+                    onClick={handleRetry}
+                    disabled={isLoading}
+                    className="mt-3 sm:mt-0 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 transition-colors flex items-center justify-center gap-2 font-medium"
+                >
+                    {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}
+                    <span>Retry Week</span>
+                </button>
+            </div>
+            {errorMessage && (
+                <p className="text-red-700 mt-2 text-sm">{errorMessage}</p>
+            )}
+            <p className="text-gray-500 mt-3 text-xs">
+                <span className="font-semibold">Original Error:</span> {weekError.error_message}
+            </p>
+        </div>
+    );
+};
+
+
+// --- 3. MAIN REVIEW COMPONENT (COMPLETE) ---
+
+export default function ReviewLessonPlan() {
     const location = useLocation();
     const navigate = useNavigate();
     const contentRef = useRef<HTMLDivElement>(null);
 
+    // Copy the plan from navigation into local state to make it mutable
+    const [plan, setPlan] = useState<LessonPlan | null>(
+        location.state?.lessonPlan || null
+    );
+
     const [isExportingPdf, setIsExportingPdf] = useState(false);
     const [isExportingDocx, setIsExportingDocx] = useState(false);
 
-    const generatedData = location.state?.generatedData as QuestionResponse | null;
+    // New handler to update the plan state after a retry
+    const handleRetryUpdate = (weekIndex: number, newWeekData: LessonPlanWeek) => {
+        if (!plan) return;
 
+        // Create a new 'weeks' array with the updated data
+        const updatedWeeks = plan.weeks.map((week, index) => {
+            if (index === weekIndex) {
+                return newWeekData;
+            }
+            return week;
+        });
+
+        // Set the new plan state
+        setPlan({ ...plan, weeks: updatedWeeks });
+    };
+
+    // --- PDF EXPORTER (Screenshots the 'contentRef' div) ---
     const handleExportPDF = async () => {
-        if (!generatedData) return;
+        const input = contentRef.current;
+        if (!input) return;
+
         setIsExportingPdf(true);
-
         try {
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const subject = generatedData.subject || "Exam Questions";
-            const date = new Date().toISOString().split('T')[0];
-            const fileName = `exam-${subject.toLowerCase().replace(/\s/g, '-')}-${date}.pdf`;
+            // Use a higher scale for better resolution
+            const canvas = await html2canvas(input, {
+                scale: 2,
+                useCORS: true,
+                windowWidth: input.scrollWidth,
+                windowHeight: input.scrollHeight
+            });
 
-            const PAGE_WIDTH = pdf.internal.pageSize.getWidth();
-            const MARGIN = 15;
-            let yPosition = MARGIN;
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF('p', 'mm', 'a4', true);
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const imgProps = pdf.getImageProperties(imgData);
+            const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-            const checkPageBreak = (neededHeight: number) => {
-                if (yPosition + neededHeight > pdf.internal.pageSize.getHeight() - MARGIN) {
-                    pdf.addPage();
-                    yPosition = MARGIN;
-                }
-            };
+            let heightLeft = imgHeight;
+            let position = 0;
 
-            // --- Document Header ---
-            pdf.setFontSize(18);
-            pdf.setFont('helvetica', 'bold');
-            pdf.text(subject, PAGE_WIDTH / 2, yPosition, { align: 'center' });
-            yPosition += 15;
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight, undefined, 'FAST');
+            heightLeft -= pdfHeight;
 
-            // --- Objectives Section ---
-            if (generatedData.objectives.length > 0) {
-                pdf.setFontSize(14);
-                pdf.setFont('helvetica', 'bold');
-                pdf.text("Objectives", MARGIN, yPosition);
-                yPosition += 8;
-
-                pdf.setFontSize(11);
-                pdf.setFont('helvetica', 'normal');
-
-                generatedData.objectives.forEach((obj, idx) => {
-                    const questionText = `${idx + 1}. ${obj.question}`;
-                    const splitQuestion = pdf.splitTextToSize(questionText, PAGE_WIDTH - MARGIN * 2);
-
-                    checkPageBreak(splitQuestion.length * 5 + Object.keys(obj.options).length * 5 + 5);
-                    pdf.setFont('helvetica', 'bold');
-                    pdf.text(splitQuestion, MARGIN, yPosition);
-                    yPosition += splitQuestion.length * 5;
-
-                    pdf.setFont('helvetica', 'normal');
-                    Object.entries(obj.options).forEach(([key, value]) => {
-                        pdf.text(`   (${key}) ${value}`, MARGIN + 5, yPosition);
-                        yPosition += 5;
-                    });
-                    yPosition += 3; // Space after question
-                });
-            }
-
-            // --- Essay Section ---
-            if (generatedData.essays.length > 0) {
-                yPosition += 5;
-                checkPageBreak(15);
-                pdf.setFontSize(14);
-                pdf.setFont('helvetica', 'bold');
-                pdf.text("Essay Part", MARGIN, yPosition);
-                yPosition += 8;
-                
-                pdf.setFontSize(12);
-                pdf.text("Section B (Theory)", MARGIN, yPosition);
-                yPosition += 10;
-
-
-                generatedData.essays.forEach((essay, idx) => {
-                    const qNum = idx + 1;
-                    if (essay.sub_questions?.length > 0) {
-                        const allNested = [essay.question, ...essay.sub_questions];
-                        const isGenericHeader = essay.question.toLowerCase().trim().startsWith('question');
-                        const questionsToRender = (isGenericHeader && allNested.length > 1) ? allNested.slice(1) : allNested;
-
-                        questionsToRender.forEach((sub, subIdx) => {
-                            const subLabel = String.fromCharCode(97 + subIdx);
-                            const cleanedSub = sub.replace(/^(\d+\.?\s*|\d+[a-z]\.?\s*)/, '').trim();
-                            const subQuestionText = `${qNum}${subLabel}. ${cleanedSub}`;
-                            const splitSubQuestion = pdf.splitTextToSize(subQuestionText, PAGE_WIDTH - MARGIN * 2);
-                            
-                            checkPageBreak(splitSubQuestion.length * 5 + 5);
-                            pdf.setFont('helvetica', 'bold');
-                            pdf.text(splitSubQuestion, MARGIN, yPosition);
-                            yPosition += splitSubQuestion.length * 5 + 3;
-                        });
-
-                    } else {
-                        const questionText = `${qNum}. ${essay.question}`;
-                        const splitQuestion = pdf.splitTextToSize(questionText, PAGE_WIDTH - MARGIN * 2);
-                        checkPageBreak(splitQuestion.length * 5 + 5);
-                        pdf.setFont('helvetica', 'bold');
-                        pdf.text(splitQuestion, MARGIN, yPosition);
-                        yPosition += splitQuestion.length * 5 + 3;
-                    }
-                });
-            }
-            
-            // --- Answer Key Section (on a new page) ---
-            if (generatedData.answers.length > 0) {
+            while (heightLeft > 0) {
+                position = heightLeft - imgHeight;
                 pdf.addPage();
-                yPosition = MARGIN;
-                pdf.setFontSize(16);
-                pdf.setFont('helvetica', 'bold');
-                pdf.text("Answer Key", PAGE_WIDTH / 2, yPosition, { align: 'center' });
-                yPosition += 15;
-
-                // Objective Answers
-                pdf.setFontSize(12);
-                pdf.text("Objective Answers", MARGIN, yPosition);
-                yPosition += 8;
-                pdf.setFontSize(10);
-                let xPos = MARGIN;
-                const objectiveAnswers = generatedData.answers.filter(a => a.type === 'objective');
-                objectiveAnswers.forEach((ans, idx) => {
-                    const text = `${idx + 1}. ${ans.answer.toUpperCase()}`;
-                    pdf.text(text, xPos, yPosition);
-                    xPos += 30; // Column width
-                    if ((idx + 1) % 5 === 0) { // 5 columns
-                        xPos = MARGIN;
-                        yPosition += 7;
-                        checkPageBreak(7);
-                    }
-                });
-
-                // Essay Answers
-                yPosition += 15;
-                checkPageBreak(15);
-                pdf.setFontSize(12);
-                pdf.setFont('helvetica', 'bold');
-                pdf.text("Essay Answers", MARGIN, yPosition);
-                yPosition += 8;
-                pdf.setFontSize(11);
-                pdf.setFont('helvetica', 'normal');
-                generatedData.answers.filter(a => a.type === 'essay').forEach((ans) => {
-                    const formattedAnswer = ans.answer.replace(/\\n/g, '\n').replace(/\s+\d+[a-z]\.\s*\[Answer for sub-question \d+\]\s*$/, '').trim();
-                    const splitAnswer = pdf.splitTextToSize(formattedAnswer, PAGE_WIDTH - MARGIN * 2);
-                    checkPageBreak(splitAnswer.length * 5 + 5);
-                    pdf.text(splitAnswer, MARGIN, yPosition);
-                    yPosition += splitAnswer.length * 5 + 5; // Add space between answers
-                });
+                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight, undefined, 'FAST');
+                heightLeft -= pdfHeight;
             }
 
-
-            pdf.save(fileName);
+            pdf.save(`lesson-plan-${plan?.subject}-${plan?.class_level}.pdf`);
         } catch (error) {
             console.error('Failed to export PDF:', error);
-            alert('Could not export to PDF. Please try again.');
+            alert('Could not export to PDF. For a higher quality, editable document, please use the DOCX export.');
         } finally {
             setIsExportingPdf(false);
         }
     };
 
+    // --- DOCX EXPORTER (Failure-Aware) ---
     const handleExportDOCX = async () => {
-        if (!generatedData) return;
+        if (!plan) return;
         setIsExportingDocx(true);
 
+        // Helper function to handle multi-line text from the AI
+        const createParagraphsFromText = (text: string) => {
+            if (!text) return [new Paragraph({ text: "" })];
+            return text.split('\n').map(line => new Paragraph({ text: line, spacing: { after: 100 } }));
+        };
+
         try {
-            const subject = generatedData.subject || "General";
-            const date = new Date().toISOString().split('T')[0];
-            const fileName = `exam-${subject.toLowerCase().replace(/\s/g, '-')}-${date}.docx`;
-            const docChildren = [];
+            const docChildren: Paragraph[] = [];
 
-            // --- Main Title ---
-            docChildren.push(new Paragraph({
-                text: `Exam Questions: ${subject}`,
-                heading: HeadingLevel.HEADING_1,
-                alignment: AlignmentType.CENTER,
-                spacing: { after: 300 },
-            }));
+            // --- 1. Title Page ---
+            docChildren.push(new Paragraph({ text: "LESSON PLAN", heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER, spacing: { after: 300 } }));
+            docChildren.push(new Paragraph({ text: plan.school_name, heading: HeadingLevel.HEADING_2, alignment: AlignmentType.CENTER, spacing: { after: 100 } }));
+            docChildren.push(new Paragraph({ text: `${plan.subject} - ${plan.class_level}`, heading: HeadingLevel.HEADING_3, alignment: AlignmentType.CENTER, spacing: { after: 50 } }));
+            docChildren.push(new Paragraph({ text: plan.term, alignment: AlignmentType.CENTER, spacing: { after: 500 } }));
+            docChildren.push(new Paragraph({ text: `State: ${plan.state}${plan.lga ? `, ${plan.lga}` : ''}`, alignment: AlignmentType.CENTER }));
+            docChildren.push(new Paragraph({ text: `Resumption Date: ${plan.resumption_date}`, alignment: AlignmentType.CENTER }));
+            docChildren.push(new Paragraph({ children: [new PageBreak()] }));
 
-            // --- Objective Questions ---
-            if (generatedData.objectives.length > 0) {
-                docChildren.push(new Paragraph({ text: "Objectives", heading: HeadingLevel.HEADING_2, spacing: { before: 200, after: 100 } }));
-                generatedData.objectives.forEach((obj, idx) => {
-                    docChildren.push(new Paragraph({ children: [new TextRun({ text: `${idx + 1}. `, bold: true }), new TextRun(obj.question)], spacing: { after: 100 } }));
-                    Object.entries(obj.options).forEach(([key, value]) => {
-                        docChildren.push(new Paragraph({ text: `\t(${key}). ${value}` }));
+
+            // --- 2. Weekly Breakdown (Now checks status) ---
+            plan.weeks.forEach((week) => {
+
+                // --- CHECK WEEK STATUS ---
+                if (week.status === 'success') {
+                    // --- SUCCESS CASE ---
+                    docChildren.push(new Paragraph({ text: `WEEK ${week.week_number}: ${week.topic}`, heading: HeadingLevel.HEADING_2, spacing: { before: 200, after: 200 }, border: { bottom: { color: "auto", space: 1, style: BorderStyle.SINGLE, size: 6 } } }));
+
+                    const metaText = `Date: ${week.start_date} | Period: ${week.period} | Duration: ${week.duration_minutes} mins`;
+                    docChildren.push(new Paragraph({ text: metaText, spacing: { after: 200 } }));
+
+                    docChildren.push(new Paragraph({ text: "OBJECTIVES", heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 100 } }));
+                    week.objectives.forEach(obj => {
+                        docChildren.push(new Paragraph({ text: obj, bullet: { level: 0 }, spacing: { after: 50 } }));
                     });
-                    docChildren.push(new Paragraph(""));
-                });
-            }
 
-            // --- Essay Questions ---
-            if (generatedData.essays.length > 0) {
-                docChildren.push(new Paragraph({ text: "Essay Part", heading: HeadingLevel.HEADING_2, spacing: { before: 200, after: 50 } }));
-                docChildren.push(new Paragraph({ text: "Section B (Theory)", heading: HeadingLevel.HEADING_3, spacing: { after: 100 } }));
-                generatedData.essays.forEach((essay, idx) => {
-                    const qNum = idx + 1;
-                    if (essay.sub_questions?.length > 0) {
-                        const allNested = [essay.question, ...essay.sub_questions];
-                        const isGenericHeader = essay.question.toLowerCase().trim().startsWith('question');
-                        const questionsToRender = (isGenericHeader && allNested.length > 1) ? allNested.slice(1) : allNested;
-                        questionsToRender.forEach((sub, subIdx) => {
-                            const subLabel = String.fromCharCode(97 + subIdx);
-                            const cleanedSub = sub.replace(/^(\d+\.?\s*|\d+[a-z]\.?\s*)/, '').trim();
-                            docChildren.push(new Paragraph({ children: [new TextRun({ text: `${qNum}${subLabel}. `, bold: true }), new TextRun(cleanedSub)], spacing: { after: 50 } }));
-                        });
-                    } else {
-                        docChildren.push(new Paragraph({ children: [new TextRun({ text: `${qNum}. `, bold: true }), new TextRun(essay.question)], spacing: { after: 100 } }));
+                    docChildren.push(new Paragraph({ text: "INSTRUCTIONAL MATERIALS", heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 100 } }));
+                    docChildren.push(new Paragraph({ text: week.instructional_materials.join(', '), spacing: { after: 200 } }));
+
+                    docChildren.push(new Paragraph({ text: "ACTIVITIES", heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 100 } }));
+                    Object.entries(week.activities).forEach(([key, value]) => {
+                        const formattedKey = key.charAt(0).toUpperCase() + key.slice(1).replace('_', ' ');
+                        docChildren.push(new Paragraph({ children: [new TextRun({ text: `${formattedKey}: `, bold: true }), new TextRun(value || "")], spacing: { after: 100 } }));
+                    });
+
+                    docChildren.push(new Paragraph({ text: "ASSESSMENT", heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 100 } }));
+                    docChildren.push(...createParagraphsFromText(week.assessment));
+
+                    docChildren.push(new Paragraph({ text: "ASSIGNMENT", heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 100 } }));
+                    docChildren.push(...createParagraphsFromText(week.assignment));
+
+                    docChildren.push(new Paragraph({ text: "SUMMARY", heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 100 } }));
+                    docChildren.push(...createParagraphsFromText(week.summary));
+
+                    if (week.possible_difficulties) {
+                        docChildren.push(new Paragraph({ text: "POSSIBLE DIFFICULTIES", heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 100 } }));
+                        docChildren.push(...createParagraphsFromText(week.possible_difficulties));
                     }
-                    docChildren.push(new Paragraph(""));
-                });
-            }
 
-            // --- Answer Key (on a new page) ---
-            if (generatedData.answers.length > 0) {
+                } else {
+                    // --- FAILURE CASE ---
+                    docChildren.push(new Paragraph({ text: `WEEK ${week.week_number}: ${week.topic}`, heading: HeadingLevel.HEADING_2, spacing: { before: 200, after: 200 }, border: { bottom: { color: "auto", space: 1, style: BorderStyle.SINGLE, size: 6 } } }));
+                    docChildren.push(new Paragraph({
+                        heading: HeadingLevel.HEADING_3,
+                        alignment: AlignmentType.CENTER,
+                        spacing: { after: 200 },
+                        children: [
+                            new TextRun({
+                                text: "GENERATION FAILED",
+                                color: "FF0000" // Apply color to the TextRun
+                            })
+                        ]
+                    }));
+                    docChildren.push(new Paragraph({ text: `Error details: ${week.error_message}`, spacing: { after: 200 } }));
+                }
+
+                // Add a page break after every week
                 docChildren.push(new Paragraph({ children: [new PageBreak()] }));
-                docChildren.push(new Paragraph({ text: "Answer Key", heading: HeadingLevel.HEADING_2, spacing: { before: 200, after: 200 } }));
-                
-                // Objective Answers in a Table
-                const objectiveAnswers = generatedData.answers.filter(a => a.type === 'objective');
-                if(objectiveAnswers.length > 0) {
-                    docChildren.push(new Paragraph({ text: "Objective Answers", heading: HeadingLevel.HEADING_3, spacing: { after: 100 } }));
-                    const rows = [];
-                    const numCols = 5;
-                    for (let i = 0; i < objectiveAnswers.length; i += numCols) {
-                        const cells = [];
-                        for (let j = 0; j < numCols; j++) {
-                            const ansIndex = i + j;
-                            if (ansIndex < objectiveAnswers.length) {
-                                const cleanAnswer = objectiveAnswers[ansIndex].answer.replace(/^\d+\.\s*/, '').trim().toUpperCase();
-                                cells.push(new TableCell({ children: [new Paragraph(`${ansIndex + 1}. ${cleanAnswer}`)]}));
-                            } else {
-                                cells.push(new TableCell({ children: [new Paragraph("")]}));
-                            }
-                        }
-                        rows.push(new TableRow({ children: cells }));
-                    }
-                    const answerTable = new Table({ rows, width: { size: 100, type: WidthType.PERCENTAGE } });
-                    docChildren.push(answerTable);
-                }
+            });
 
-                // Essay Answers
-                const essayAnswers = generatedData.answers.filter(a => a.type === 'essay');
-                if(essayAnswers.length > 0) {
-                    docChildren.push(new Paragraph({ text: "Essay Answers", heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 100 } }));
-                    essayAnswers.forEach((ans) => {
-                        let cleanedText = ans.answer
-                            .replace(/^\d+\.\s*/, '')
-                            .replace(/^\d+[a-z]\.\s*\d+[a-z]\.\s*/, '')
-                            .replace(/(\r\n|\n|\\n)\s*\d+[a-z]\.\s*\[Answer for sub-question \d+\]\s*/g, '')
-                            .trim();
-                        
-                        const paragraphs = cleanedText.split(/\\n\\n|\\n\s*\\n/); 
-
-                        paragraphs.forEach(para => {
-                            if (para.trim()) {
-                                const lines = para.split(/\\n/);
-                                
-                                // THIS IS THE CORRECTED LOGIC BLOCK
-                                const children = lines.flatMap((line, index) => {
-                                    const trimmedLine = line.trim();
-                                    const runs = [];
-
-                                    if (trimmedLine) {
-                                        runs.push(new TextRun(trimmedLine));
-                                    }
-
-                                    if (index < lines.length - 1) {
-                                        runs.push(new TextRun({ break: 1 }));
-                                    }
-                                    
-                                    return runs;
-                                });
-
-                                if(children.length > 0) {
-                                    docChildren.push(new Paragraph({ children, spacing: { after: 100 } }));
-                                }
-                            }
-                        });
-                    });
-                }
-            }
-
-            // --- Document Assembly with Header/Footer ---
+            // --- 3. Document Assembly with Headers and Footers ---
             const doc = new Document({
                 sections: [{
                     headers: {
                         default: new Header({
                             children: [new Paragraph({
-                                text: `Subject: ${subject}`,
                                 alignment: AlignmentType.RIGHT,
+                                children: [new TextRun(`${plan.school_name} | ${plan.subject} | ${plan.class_level}`)]
                             })],
                         }),
                     },
                     footers: {
                         default: new Footer({
-                            children: [new Paragraph({
-                                alignment: AlignmentType.CENTER,
-                                children: [
-                                    new TextRun("Page "),
-                                    new TextRun({ children: [PageNumber.CURRENT] }),
-                                    new TextRun(" of "),
-                                    new TextRun({ children: [PageNumber.TOTAL_PAGES] }),
-                                ],
-                            })],
+                            children: [
+                                new Paragraph({
+                                    alignment: AlignmentType.CENTER,
+                                    children: [new TextRun({ children: [PageNumber.CURRENT, " | ", plan.term] })],
+                                }),
+                            ],
                         }),
                     },
                     children: docChildren,
@@ -345,8 +332,7 @@ export default function ReviewQuestions() {
             });
 
             const blob = await Packer.toBlob(doc);
-            saveAs(blob, fileName);
-
+            saveAs(blob, `lesson-plan-${plan.subject}-${plan.class_level}.docx`);
         } catch (error) {
             console.error('Failed to export DOCX:', error);
             alert('Could not export to DOCX. Please try again.');
@@ -355,20 +341,17 @@ export default function ReviewQuestions() {
         }
     };
 
-    if (!generatedData) {
+    if (!plan) {
         return (
             <div className="min-h-screen bg-gray-50 flex flex-col justify-center items-center p-6 text-center">
-                <AlertTriangle className="mx-auto w-16 h-16 text-yellow-400" />
-                <h1 className="mt-4 text-2xl font-bold text-gray-800">No Questions Found</h1>
-                <p className="mt-2 text-gray-600">
-                    Please generate a new set of questions first.
-                </p>
+                <h1 className="mt-4 text-2xl font-bold text-gray-800">No Lesson Plan Found</h1>
+                <p className="mt-2 text-gray-600">Please generate a lesson plan first.</p>
                 <button
-                    onClick={() => navigate('/exams/generate')}
-                    className="mt-6 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 mx-auto"
+                    onClick={() => navigate('/lessons')}
+                    className="mt-6 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
                 >
                     <ArrowLeft className="w-4 h-4" />
-                    Go to Generator
+                    Back to Generator
                 </button>
             </div>
         );
@@ -376,24 +359,27 @@ export default function ReviewQuestions() {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
-            <div className="max-w-4xl mx-auto">
+            <div className="max-w-6xl mx-auto">
                 <div className="bg-white rounded-2xl shadow-xl p-8">
-                    {/* --- Header --- */}
+                    {/* Header */}
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
                         <div>
-                            <h1 className="text-3xl font-bold text-gray-800">Review Exam Questions</h1>
-                            <p className="text-gray-500 mt-1">Review the generated questions and export them.</p>
+                            <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
+                                <BookOpen className="w-7 h-7 text-indigo-600" />
+                                Review Lesson Plan
+                            </h1>
+                            <p className="text-gray-500 mt-1">Review, retry, and export your generated lesson plan.</p>
                         </div>
                         <button
-                            onClick={() => navigate(-1)}
-                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center gap-2 text-sm self-start sm:self-center"
+                            onClick={() => navigate('/lessons')}
+                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center gap-2 text-sm"
                         >
                             <ArrowLeft className="w-4 h-4" />
-                            Back
+                            Back to Generator
                         </button>
                     </div>
 
-                    {/* --- Action Buttons --- */}
+                    {/* Export Buttons */}
                     <div className="flex flex-col sm:flex-row gap-4 mb-8">
                         <button
                             onClick={handleExportDOCX}
@@ -401,7 +387,7 @@ export default function ReviewQuestions() {
                             className="w-full sm:w-auto flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 font-medium"
                         >
                             {isExportingDocx ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileDown className="w-5 h-5" />}
-                            <span>Export to DOCX</span>
+                            <span>Export to DOCX (Recommended)</span>
                         </button>
                         <button
                             onClick={handleExportPDF}
@@ -413,104 +399,122 @@ export default function ReviewQuestions() {
                         </button>
                     </div>
 
-                    {/* --- Content to be Exported (and displayed) --- */}
+                    {/* --- Interactive Retry Section --- */}
+                    {/* This section is OUTSIDE contentRef and shows interactive error cards */}
+                    <div className="space-y-4 mb-8">
+                        {plan.weeks.map((week, idx) => {
+                            if (week.status === 'failed') {
+                                return (
+                                    <WeekErrorCard
+                                        key={`error-${week.week_number}-${idx}`} // Use index for re-render
+                                        weekError={week}
+                                        planDetails={plan}
+                                        onRetry={handleRetryUpdate}
+                                    />
+                                );
+                            }
+                            return null; // Successful weeks are rendered below
+                        })}
+                    </div>
+
+                    {/* --- Content to be Exported (and Displayed) --- */}
                     <div ref={contentRef} className="space-y-8 p-6 border rounded-lg bg-white">
-                        {/* Objectives */}
-                        {generatedData.objectives?.length > 0 && (
-                            <section>
-                                <h3 className="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">Objectives</h3>
-                                <div className="space-y-5">
-                                    {generatedData.objectives.map((obj, idx) => (
-                                        <div key={`obj-${idx}`}>
-                                            <p className="font-medium text-gray-800 mb-2">{idx + 1}. {obj.question}</p>
-                                            <div className="ml-6 space-y-1">
-                                                {Object.entries(obj.options).map(([key, value]) => (
-                                                    <p key={key} className="text-gray-700">{key}. {value}</p>
-                                                ))}
+                        {/* Header Info */}
+                        <div className="text-center border-b pb-6">
+                            <h2 className="text-2xl font-bold text-gray-800 mb-2">LESSON PLAN</h2>
+                            <div className="space-y-1 text-gray-600">
+                                <p className="font-semibold">{plan.school_name}</p>
+                                <p>Subject: <span className="font-semibold text-indigo-700">{plan.subject}</span></p>
+                                <p>Class: {plan.class_level} | Term: {plan.term}</p>
+                                <p>State: {plan.state}{plan.lga ? `, ${plan.lga}` : ''}</p>
+                                <p>Resumption Date: {plan.resumption_date} | Duration: {plan.duration_weeks} weeks</p>
+                            </div>
+                        </div>
+
+                        {/* Weekly Breakdown (Conditional Rendering) */}
+                        {plan.weeks.map((week, idx) => (
+                            <div key={`content-${week.week_number}-${idx}`} className={`${idx > 0 ? 'border-t pt-6' : ''}`}>
+
+                                {week.status === 'success' ? (
+                                    // --- SUCCESS CASE (Existing UI) ---
+                                    <>
+                                        <div className="bg-indigo-50 p-4 rounded-lg mb-4">
+                                            <h3 className="text-xl font-bold text-indigo-800">WEEK {week.week_number}</h3>
+                                            <p className="text-sm text-gray-600 mt-1">Date: {week.start_date}</p>
+                                            <p className="text-sm text-gray-600">Period: {week.period} | Duration: {week.duration_minutes} mins</p>
+                                        </div>
+
+                                        <div className="space-y-4 ml-4">
+                                            <div>
+                                                <h4 className="font-bold text-gray-800 mb-2">TOPIC</h4>
+                                                <p className="text-gray-700">{week.topic}</p>
                                             </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </section>
-                        )}
 
-                        {/* Essays */}
-                        {generatedData.essays?.length > 0 && (
-                            <section>
-                                <h3 className="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">Essay Part</h3>
-                                <p className="text-lg font-medium text-gray-700 mb-4">Section B (Theory)</p>
-                                <div className="space-y-5">
-                                    {generatedData.essays.map((essay, idx) => {
-                                        const qNum = idx + 1;
-                                        if (essay.sub_questions?.length > 0) {
-                                            const allNested = [essay.question, ...essay.sub_questions];
-                                            const firstQuestionLower = essay.question.toLowerCase().trim();
-                                            const isGenericHeader = firstQuestionLower.startsWith('question') || firstQuestionLower.startsWith('essay');
-                                            const questionsToRender = (isGenericHeader && allNested.length > 1) ? allNested.slice(1) : allNested;
-                                            return (
-                                                <div key={`essay-nested-${idx}`} className="ml-6 mt-2 space-y-1">
-                                                    {questionsToRender.map((sub, subIdx) => {
-                                                        const cleanedSub = sub.replace(/^(\d+\.?\s*|\d+[a-z]\.?\s*)/, '').trim();
-                                                        return (
-                                                            <p key={subIdx} className="text-gray-700">
-                                                                <span className="font-medium text-gray-800">{qNum}{String.fromCharCode(97 + subIdx)}. </span>
-                                                                {cleanedSub}
-                                                            </p>
-                                                        )
-                                                    })}
-                                                </div>
-                                            );
-                                        } else {
-                                            return (
-                                                <div key={`essay-single-${idx}`}>
-                                                    <p className="font-medium text-gray-800 mb-2">{qNum}. {essay.question}</p>
-                                                </div>
-                                            );
-                                        }
-                                    })}
-                                </div>
-                            </section>
-                        )}
+                                            <div>
+                                                <h4 className="font-bold text-gray-800 mb-2">OBJECTIVES</h4>
+                                                <ul className="list-disc list-inside space-y-1">
+                                                    {week.objectives.map((obj, i) => (
+                                                        <li key={i} className="text-gray-700">{obj}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
 
-                        {/* Answers */}
-                        {generatedData.answers?.length > 0 && (
-                            <section>
-                                <h3 className="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">Answer Key</h3>
-                                {generatedData.answers.filter(a => a.type === "objective").length > 0 && (
-                                    <div className="mb-6">
-                                        <h4 className="text-lg font-semibold text-gray-600 mb-2">Objectives Answers</h4>
-                                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                                            {generatedData.answers.filter(a => a.type === "objective").map((ans, idx) => (
-                                                <div key={`ans-obj-${idx}`} className="p-2 bg-green-50 rounded border border-green-200 text-center">
-                                                    <p className="text-sm text-green-900">
-                                                        <span className="font-bold">{idx + 1}. </span>
-                                                        <span>{ans.answer.toUpperCase()}</span>
-                                                    </p>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                                {generatedData.answers.filter(a => a.type === "essay").length > 0 && (
-                                    <div className="mb-6">
-                                        <h4 className="text-lg font-semibold text-gray-600 mb-2">Essay Answers</h4>
-                                        <div className="space-y-3">
-                                            {generatedData.answers.filter(a => a.type === "essay").map((ans, idx) => {
-                                                let formattedAnswer = ans.answer.replace(/\\n/g, '\n');
-                                                formattedAnswer = formattedAnswer.replace(/\s+\d+[a-z]\.\s*\[Answer for sub-question \d+\]\s*$/, '').trim();
-                                                return (
-                                                    <div key={`ans-essay-${idx}`} className="p-4 border-l-4 border-blue-500 bg-blue-50 rounded whitespace-pre-wrap">
-                                                        <p className="text-sm text-gray-800">
-                                                            {formattedAnswer}
+                                            <div>
+                                                <h4 className="font-bold text-gray-800 mb-2">INSTRUCTIONAL MATERIALS</h4>
+                                                <p className="text-gray-700">{week.instructional_materials.join(', ')}</p>
+                                            </div>
+
+                                            <div>
+                                                <h4 className="font-bold text-gray-800 mb-2">ACTIVITIES</h4>
+                                                <div className="space-y-2 ml-4">
+                                                    {Object.entries(week.activities).map(([key, value]) => (
+                                                        <p key={key} className="text-gray-700">
+                                                            <span className="font-semibold">{key.charAt(0).toUpperCase() + key.slice(1).replace('_', ' ')}:</span> {value}
                                                         </p>
-                                                    </div>
-                                                );
-                                            })}
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <h4 className="font-bold text-gray-800 mb-2">ASSESSMENT</h4>
+                                                <p className="text-gray-700 whitespace-pre-wrap">{week.assessment}</p>
+                                            </div>
+
+                                            <div>
+                                                <h4 className="font-bold text-gray-800 mb-2">ASSIGNMENT</h4>
+                                                <p className="text-gray-700 whitespace-pre-wrap">{week.assignment}</p>
+                                            </div>
+
+                                            <div>
+                                                <h4 className="font-bold text-gray-800 mb-2">SUMMARY</h4>
+                                                <p className="text-gray-700 whitespace-pre-wrap">{week.summary}</p>
+                                            </div>
+
+                                            {week.possible_difficulties && (
+                                                <div>
+                                                    <h4 className="font-bold text-gray-800 mb-2">POSSIBLE DIFFICULTIES</h4>
+                                                    <p className="text-gray-700 whitespace-pre-wrap">{week.possible_difficulties}</p>
+                                                </div>
+                                            )}
                                         </div>
-                                    </div>
+                                    </>
+                                ) : (
+                                    // --- FAILURE CASE (New PRINTABLE UI) ---
+                                    // This is a simple placeholder for the PDF/screenshot export
+                                    <>
+                                        <div className="bg-red-50 p-4 rounded-lg mb-4">
+                                            <h3 className="text-xl font-bold text-red-800">WEEK {week.week_number}</h3>
+                                        </div>
+                                        <div className="space-y-4 ml-4 text-center py-12">
+                                            <AlertTriangle className="w-12 h-12 text-red-400 mx-auto" />
+                                            <h4 className="font-bold text-red-700 text-lg">GENERATION FAILED</h4>
+                                            <p className="text-gray-600">Topic: {week.topic}</p>
+                                            <p className="text-gray-500 text-sm">Please retry this week using the button above.</p>
+                                        </div>
+                                    </>
                                 )}
-                            </section>
-                        )}
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>

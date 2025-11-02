@@ -19,13 +19,46 @@ interface LessonPlanRequest {
     topics: string[];
 }
 
+/** Defines the structure for the Failed Generation response from the backend */
+interface WeekGenerationError {
+    status: "failed";
+    week_number: number;
+    topic: string;
+    error_message: string;
+}
+
 /** Backend response structure */
-interface Week {
+// interface Week {
+//     status: "failed";
+//     week_number: number;
+//     start_date: string;
+//     topic: string;
+//     objectives: string[];
+//     instructional_materials: string[];
+//     activities: {
+//         introduction: string;
+//         explanation: string;
+//         guided_practice: string;
+//         independent_practice: string;
+//         practical: string;
+//     };
+//     assessment: string;
+//     assignment: string[];
+//     summary: string;
+//     possible_difficulties: string[];
+//     period: string;
+//     duration: string;
+// }
+interface LessonWeek {
+    status: "success";
     week_number: number;
     start_date: string;
+    end_date: string; // Added field
     topic: string;
+    subtopic?: string; // Added field
     objectives: string[];
     instructional_materials: string[];
+    prerequisite_knowledge?: string; // Added field
     activities: {
         introduction: string;
         explanation: string;
@@ -34,12 +67,16 @@ interface Week {
         practical: string;
     };
     assessment: string;
-    assignment: string[];
+    assignment: string; // Changed from string[] to string
     summary: string;
-    possible_difficulties: string[];
+    possible_difficulties: string; // Changed from string[]
+    remarks?: string; // Added field
     period: string;
-    duration: string;
+    duration_minutes: number; // Changed from duration: string
 }
+
+// --- CREATE A UNION TYPE ---
+type LessonPlanWeek = LessonWeek | WeekGenerationError;
 
 interface LessonPlan {
     school_name: string;
@@ -50,12 +87,14 @@ interface LessonPlan {
     term: string;
     resumption_date: string;
     duration_weeks: number;
-    weeks: Week[];
+    weeks: LessonPlanWeek[];
 }
 
 interface LessonPlanResponse {
     plan: LessonPlan;
 }
+
+
 
 // --- CONSTANTS ---
 
@@ -254,32 +293,56 @@ const PlanViewer: React.FC<{ plan: LessonPlan }> = ({ plan }) => {
 
             <div className="space-y-4">
                 {plan.weeks.slice(0, 2).map(week => (
-                    <div key={week.week_number} className="border border-gray-200 rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition duration-300">
-                        <button
-                            className="w-full flex justify-between items-center p-4 bg-indigo-50 hover:bg-indigo-100 transition duration-200 focus:outline-none"
-                            onClick={() => toggleWeek(week.week_number)}
-                            aria-expanded={openWeek === week.week_number}
-                        >
-                            <span className="text-lg font-semibold text-indigo-800">
-                                Week {week.week_number}: {week.topic}
-                            </span>
-                            <ChevronDown className={`w-5 h-5 text-indigo-600 transform transition-transform ${openWeek === week.week_number ? 'rotate-180' : 'rotate-0'}`} />
-                        </button>
+                    <div
+                        key={week.week_number}
+                        className="border border-gray-200 rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition duration-300"
+                    >
+                        {/* --- NEW: Conditional Rendering Logic --- */}
+                        {week.status === 'success' ? (
+                            // 1. SUCCESS CASE (Your existing code)
+                            <>
+                                <button
+                                    className="w-full flex justify-between items-center p-4 bg-indigo-50 hover:bg-indigo-100 transition duration-200 focus:outline-none"
+                                    onClick={() => toggleWeek(week.week_number)}
+                                    aria-expanded={openWeek === week.week_number}
+                                >
+                                    <span className="text-lg font-semibold text-indigo-800">
+                                        Week {week.week_number}: {week.topic}
+                                    </span>
+                                    <ChevronDown className={`w-5 h-5 text-indigo-600 transform transition-transform ${openWeek === week.week_number ? 'rotate-180' : 'rotate-0'}`} />
+                                </button>
 
-                        {openWeek === week.week_number && (
-                            <div className="p-4 bg-white border-t border-gray-200">
-                                <p className="text-sm text-gray-600 mb-4 font-medium">
-                                    Starting Date: <span className="font-mono text-gray-800">{week.start_date}</span>
-                                </p>
-                                <div className="space-y-2">
-                                    <p className="text-sm"><span className="font-semibold">Objectives:</span> {week.objectives.join(', ')}</p>
-                                    <p className="text-sm"><span className="font-semibold">Materials:</span> {week.instructional_materials.join(', ')}</p>
-                                    <p className="text-sm"><span className="font-semibold">Assessment:</span> {week.assessment}</p>
+                                {openWeek === week.week_number && (
+                                    <div className="p-4 bg-white border-t border-gray-200">
+                                        <p className="text-sm text-gray-600 mb-4 font-medium">
+                                            Starting Date: <span className="font-mono text-gray-800">{week.start_date}</span>
+                                        </p>
+                                        <div className="space-y-2">
+                                            <p className="text-sm"><span className="font-semibold">Objectives:</span> {week.objectives.join(', ')}</p>
+                                            <p className="text-sm"><span className="font-semibold">Materials:</span> {week.instructional_materials.join(', ')}</p>
+                                            <p className="text-sm"><span className="font-semibold">Assessment:</span> {week.assessment}</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            // 2. FAILURE CASE (New Error Card)
+                            <div className="w-full flex justify-between items-center p-4 bg-red-50">
+                                <span className="text-lg font-semibold text-red-800">
+                                    Week {week.week_number}: {week.topic}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                    <XCircle className="w-5 h-5 text-red-600" />
+                                    <span className="text-sm font-medium text-red-700">
+                                        Generation Failed
+                                    </span>
                                 </div>
                             </div>
                         )}
                     </div>
                 ))}
+
+                {/* --- This part remains unchanged and will work correctly --- */}
                 {plan.weeks.length > 2 && (
                     <p className="text-center text-gray-500 text-sm">... and {plan.weeks.length - 2} more weeks. View full plan after generation.</p>
                 )}

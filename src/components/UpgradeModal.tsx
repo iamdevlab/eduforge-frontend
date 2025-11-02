@@ -1,20 +1,8 @@
 // src/components/UpgradeModal.tsx
 import React, { useState } from 'react';
 import { useUpgradeModalStore } from '../stores/useUpgradeModalStore';
-import apiClient from '../services/apiClient'; // Import our updated apiClient
-
-// Add some basic CSS for the modal (you can put this in your main .css file)
-/*
-.modal-backdrop {
-  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex; align-items: center; justify-content: center; z-index: 1000;
-}
-.modal-content {
-  background: white; padding: 2rem; border-radius: 8px;
-  max-width: 400px; width: 100%;
-}
-*/
+import apiClient from '../services/apiClient';
+import { CheckCircle } from 'lucide-react'; // Import the check icon
 
 export function UpgradeModal() {
     const { isOpen, closeModal } = useUpgradeModalStore();
@@ -25,13 +13,9 @@ export function UpgradeModal() {
         setIsLoading(true);
         setError(null);
         try {
-            // 1. Call the new endpoint we created in Step 3
             const response = await apiClient.post('/subscriptions/create-checkout');
-
-            // 2. Get the URL from Paystack
             const { authorization_url } = response.data;
 
-            // 3. Redirect the user to the payment page
             if (authorization_url) {
                 window.location.href = authorization_url;
             } else {
@@ -49,26 +33,57 @@ export function UpgradeModal() {
     }
 
     return (
-        <div className="modal-backdrop" onClick={closeModal}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                <h2>Upgrade to EduForge Pro</h2>
-                <p>
-                    You've reached your free limit. Upgrade to Pro for <strong>₦3,499/month</strong> to unlock:
+        // Backdrop
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 transition-opacity duration-300"
+            onClick={closeModal}
+        >
+            {/* Modal Content */}
+            <div
+                className="relative bg-white p-6 sm:p-8 rounded-xl shadow-2xl max-w-md w-full m-4 font-['Inter']"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <h2 className="text-2xl font-bold text-gray-800">Upgrade to EduForge Pro</h2>
+                <p className="mt-4 text-gray-600">
+                    You've reached your free limit. Upgrade to Pro for <strong className="text-indigo-600">₦3,499/month</strong> to unlock:
                 </p>
-                <ul>
-                    <li>✔️ Unlimited lesson note generation</li>
-                    <li>✔️ Unlimited exam questions</li>
-                    <li>✔️ Premium export options (PDF & DOCX)</li>
-                    <li>✔️ Priority support</li>
+
+                {/* Features List */}
+                <ul className="mt-4 space-y-2 text-gray-600">
+                    <li className="flex items-center">
+                        <CheckCircle className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" />
+                        <span>Unlimited lesson note generation</span>
+                    </li>
+                    <li className="flex items-center">
+                        <CheckCircle className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" />
+                        <span>Unlimited exam questions</span>
+                    </li>
+                    <li className="flex items-center">
+                        <CheckCircle className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" />
+                        <span>Premium export options (PDF & DOCX)</span>
+                    </li>
+                    <li className="flex items-center">
+                        <CheckCircle className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" />
+                        <span>Priority support</span>
+                    </li>
                 </ul>
 
-                {error && <p style={{ color: 'red' }}>{error}</p>}
+                {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.5rem' }}>
-                    <button onClick={closeModal} disabled={isLoading}>
+                {/* Buttons */}
+                <div className="mt-6 flex flex-col sm:flex-row sm:justify-between sm:space-x-4 space-y-2 sm:space-y-0">
+                    <button
+                        onClick={closeModal}
+                        disabled={isLoading}
+                        className="w-full px-4 py-2 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition duration-150 disabled:opacity-50"
+                    >
                         Maybe Later
                     </button>
-                    <button onClick={handleUpgrade} disabled={isLoading}>
+                    <button
+                        onClick={handleUpgrade}
+                        disabled={isLoading}
+                        className="w-full px-4 py-2 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition duration-150 disabled:bg-indigo-300"
+                    >
                         {isLoading ? 'Redirecting...' : 'Upgrade Now'}
                     </button>
                 </div>

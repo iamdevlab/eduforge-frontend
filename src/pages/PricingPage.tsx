@@ -96,7 +96,7 @@ export default function PricingPage() {
         );
     }
 
-    const isPro = status?.subscription_tier === 'PRO';
+    const isPro = status?.subscription_tier?.toUpperCase() === 'PRO';
     const isProActive = isPro && status?.is_active === true;
 
     return (
@@ -223,7 +223,6 @@ export default function PricingPage() {
             <footer className="text-center mt-12 text-gray-500 text-sm">
                 <p>
                     Payments are securely processed by Paystack.
-                    You can cancel your subscription at any time.
                 </p>
                 <p className="mt-2">
                     <Link to="/terms" className="hover:underline">Terms of Service</Link> | <Link to="/privacy" className="hover:underline">Privacy Policy</Link>
