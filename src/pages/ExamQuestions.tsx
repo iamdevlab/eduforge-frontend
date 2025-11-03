@@ -486,10 +486,10 @@ export default function ExamQuestions() {
                             {loading ? (
                                 <>
                                     <Loader2 className="w-5 h-5 animate-spin" />
-                                    Generating Questions...
+                                    Requesting Questions...
                                 </>
                             ) : (
-                                'Generate Questions'
+                                'Request Questions'
                             )}
                         </button>
                     </div>
@@ -497,7 +497,7 @@ export default function ExamQuestions() {
                     {response && (
                         <div className="mt-8 space-y-6">
                             <div className="border-t pt-6">
-                                <h2 className="text-2xl font-bold text-gray-800 mb-4">Generated Questions</h2>
+                                <h2 className="text-2xl font-bold text-gray-800 mb-4">Examination Questions</h2>
 
                                 {response.objectives && response.objectives.length > 0 && (
                                     <div className="mb-6">

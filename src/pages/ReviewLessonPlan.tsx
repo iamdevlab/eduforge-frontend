@@ -5,13 +5,13 @@ import { ArrowLeft, BookOpen, FileDown, Loader2 } from 'lucide-react';
 // Import libraries for exporting
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { 
-    Document, 
-    Packer, 
-    Paragraph, 
-    TextRun, 
-    HeadingLevel, 
-    PageBreak, 
+import {
+    Document,
+    Packer,
+    Paragraph,
+    TextRun,
+    HeadingLevel,
+    PageBreak,
     AlignmentType,
     Header,
     Footer,
@@ -76,8 +76,8 @@ export default function ReviewLessonPlan() {
         setIsExportingPdf(true);
         try {
             // Use a higher scale for better resolution and tell canvas how to handle page breaks
-            const canvas = await html2canvas(input, { 
-                scale: 2, 
+            const canvas = await html2canvas(input, {
+                scale: 2,
                 useCORS: true,
                 windowWidth: input.scrollWidth,
                 windowHeight: input.scrollHeight
@@ -89,7 +89,7 @@ export default function ReviewLessonPlan() {
             const pdfHeight = pdf.internal.pageSize.getHeight();
             const imgProps = pdf.getImageProperties(imgData);
             const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
-            
+
             let heightLeft = imgHeight;
             let position = 0;
 
@@ -122,7 +122,7 @@ export default function ReviewLessonPlan() {
             if (!text) return [new Paragraph({ text: "" })];
             return text.split('\n').map(line => new Paragraph({ text: line, spacing: { after: 100 } }));
         };
-        
+
         try {
             const docChildren: Paragraph[] = [];
 
@@ -154,7 +154,7 @@ export default function ReviewLessonPlan() {
                 // Instructional Materials
                 docChildren.push(new Paragraph({ text: "INSTRUCTIONAL MATERIALS", heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 100 } }));
                 docChildren.push(new Paragraph({ text: week.instructional_materials.join(', '), spacing: { after: 200 } }));
-                
+
                 // Activities
                 docChildren.push(new Paragraph({ text: "ACTIVITIES", heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 100 } }));
                 Object.entries(week.activities).forEach(([key, value]) => {
@@ -169,11 +169,11 @@ export default function ReviewLessonPlan() {
                 // Assignment
                 docChildren.push(new Paragraph({ text: "ASSIGNMENT", heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 100 } }));
                 docChildren.push(...createParagraphsFromText(week.assignment));
-                
+
                 // Summary
                 docChildren.push(new Paragraph({ text: "SUMMARY", heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 100 } }));
                 docChildren.push(...createParagraphsFromText(week.summary));
-                
+
                 // Possible Difficulties
                 if (week.possible_difficulties) {
                     docChildren.push(new Paragraph({ text: "POSSIBLE DIFFICULTIES", heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 100 } }));
@@ -199,7 +199,7 @@ export default function ReviewLessonPlan() {
                             children: [
                                 new Paragraph({
                                     alignment: AlignmentType.CENTER,
-                                    children: [ new TextRun({ children: [PageNumber.CURRENT, " | ", plan.term] }) ],
+                                    children: [new TextRun({ children: [PageNumber.CURRENT, " | ", plan.term] })],
                                 }),
                             ],
                         }),
@@ -222,7 +222,7 @@ export default function ReviewLessonPlan() {
         return (
             <div className="min-h-screen bg-gray-50 flex flex-col justify-center items-center p-6 text-center">
                 <h1 className="mt-4 text-2xl font-bold text-gray-800">No Lesson Plan Found</h1>
-                <p className="mt-2 text-gray-600">Please generate a lesson plan first.</p>
+                <p className="mt-2 text-gray-600">Please build a lesson plan first.</p>
                 <button
                     onClick={() => navigate('/lessons')}
                     className="mt-6 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
@@ -245,14 +245,14 @@ export default function ReviewLessonPlan() {
                                 <BookOpen className="w-7 h-7 text-indigo-600" />
                                 Review Lesson Plan
                             </h1>
-                            <p className="text-gray-500 mt-1">Review and export your generated lesson plan.</p>
+                            <p className="text-gray-500 mt-1">Review and export your lesson plan.</p>
                         </div>
                         <button
                             onClick={() => navigate('/lessons')}
                             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center gap-2 text-sm"
                         >
                             <ArrowLeft className="w-4 h-4" />
-                            Back to Generator
+                            Back to Builder
                         </button>
                     </div>
 
@@ -344,7 +344,7 @@ export default function ReviewLessonPlan() {
                                         <h4 className="font-bold text-gray-800 mb-2">SUMMARY</h4>
                                         <p className="text-gray-700 whitespace-pre-wrap">{week.summary}</p>
                                     </div>
-                                    
+
                                     {week.possible_difficulties && (
                                         <div>
                                             <h4 className="font-bold text-gray-800 mb-2">POSSIBLE DIFFICULTIES</h4>

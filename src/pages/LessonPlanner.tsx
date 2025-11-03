@@ -283,7 +283,7 @@ const PlanViewer: React.FC<{ plan: LessonPlan }> = ({ plan }) => {
             <div className="flex items-center justify-between border-b pb-4 mb-4">
                 <h2 className="text-3xl font-extrabold text-indigo-700 flex items-center">
                     <BookOpen className="w-8 h-8 mr-3" />
-                    Generated Lesson Plan Preview
+                    Lesson Plan Preview
                 </h2>
                 <div className="text-sm font-medium text-gray-500">
                     <p>{plan.school_name} | {plan.class_level}, {plan.term}</p>
@@ -473,7 +473,7 @@ const LessonPlanner: React.FC = () => {
                 <header className="text-center py-6">
                     <h1 className="text-4xl font-extrabold text-gray-900 flex items-center justify-center">
                         <Zap className="w-8 h-8 text-indigo-600 mr-2" />
-                        AI Lesson Plan Generator
+                        AI Lesson Plan Builder
                     </h1>
                     <p className="mt-2 text-lg text-gray-500">
                         Effortlessly create a comprehensive, week-by-week lesson plan.
@@ -489,7 +489,7 @@ const LessonPlanner: React.FC = () => {
                 {isSuccess && (
                     <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-xl mb-4 flex items-center shadow-md" role="alert">
                         <CheckCircle className="w-5 h-5 mr-3" />
-                        <span className="block sm:inline">Lesson plan successfully generated! Redirecting to review page...</span>
+                        <span className="block sm:inline">Lesson plan successfully created! Redirecting to review page...</span>
                     </div>
                 )}
 
@@ -597,12 +597,12 @@ const LessonPlanner: React.FC = () => {
                         {isLoading ? (
                             <>
                                 <RefreshCw className="w-5 h-5 mr-3 animate-spin" />
-                                Generating Plan...
+                                Building Plan...
                             </>
                         ) : (
                             <>
                                 <Zap className="w-5 h-5 mr-3" />
-                                Generate Lesson Plan
+                                Build Lesson Plan
                             </>
                         )}
                     </button>
