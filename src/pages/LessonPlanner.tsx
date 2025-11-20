@@ -114,8 +114,8 @@ const CLASS_LEVELS = [
 ];
 
 const TERM_OPTIONS = ['First Term', 'Second Term', 'Third Term'];
-const DEFAULT_DURATION = 10;
-const MAX_DURATION = 10;
+const DEFAULT_DURATION = 1;
+const MAX_DURATION = 2;
 
 const getSubjectsForClass = (classLevel: string): string[] => {
     if (!classLevel) return [];
