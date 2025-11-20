@@ -73,6 +73,7 @@ interface LessonWeek {
     remarks?: string; // Added field
     period: string;
     duration_minutes: number; // Changed from duration: string
+    diagram_svg?: string;
 }
 
 // --- CREATE A UNION TYPE ---

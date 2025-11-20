@@ -54,6 +54,7 @@ interface WeekSuccess {
     remarks?: string;
     period: string;
     duration_minutes: number;
+    diagram_svg?: string;
 }
 
 interface WeekError {
@@ -362,7 +363,24 @@ export default function ReviewLessonPlan() {
                                                     ))}
                                                 </div>
                                             </div>
-
+                                            {/* --- NEW DIAGRAM SECTION --- */}
+                                            {week.diagram_svg && (
+                                                <div className="mb-6 p-4 border border-gray-200 rounded-lg bg-white shadow-sm">
+                                                    <h4 className="font-bold text-gray-800 mb-4 border-b pb-2">
+                                                        VISUAL AID: {week.topic}
+                                                    </h4>
+                                                    <div className="flex flex-col items-center justify-center">
+                                                        <div
+                                                            className="w-full max-w-md overflow-hidden bg-white"
+                                                            // This is safe because the SVG comes from your own secured backend
+                                                            dangerouslySetInnerHTML={{ __html: week.diagram_svg }}
+                                                        />
+                                                        <p className="text-xs text-gray-500 mt-2 italic">
+                                                            Fig 1. Schematic Diagram for Week {week.week_number}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            )}
                                             <div>
                                                 <h4 className="font-bold text-gray-800 mb-2">SUMMARY</h4>
                                                 <p className="text-gray-700 whitespace-pre-wrap">{week.summary}</p>
